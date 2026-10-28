@@ -387,6 +387,13 @@ public class MainActivity extends Activity {
         public String getRemotes() { return remotes(); }
 
         @android.webkit.JavascriptInterface
+        public void setLandscape(boolean on) {
+            main.post(() -> setRequestedOrientation(on
+                    ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED));
+        }
+
+        @android.webkit.JavascriptInterface
         public String netStatus() { return net == null ? "{}" : net.statusJson(); }
 
         @android.webkit.JavascriptInterface
