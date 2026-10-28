@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV app-row banner -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="rectangle"><gradient android:angle="315" android:startColor="#5b8fff" android:centerColor="#3b4fd6" android:endColor="#120e3a" /></shape></item>
+    <item android:gravity="center" android:width="110dp" android:height="110dp" android:drawable="@drawable/ic_fg" />
+</layer-list>

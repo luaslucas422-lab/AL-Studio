@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowShowWallpaper">false</item>
+    </style>
+    <color name="bg">#07080d</color>
+    <color name="accent">#4f8cff</color>
+    <color name="accent_dark">#1f3f8a</color>
+</resources>

@@ -1,0 +1,45 @@
+name: Build AL Studio APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Build APK
+        run: gradle :app:assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk AL-Studio.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AL-Studio-APK
+          path: AL-Studio.apk
+
+      - name: Publish to Releases (easy phone download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AL Studio build ${{ github.run_number }}
+          files: AL-Studio.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: write
