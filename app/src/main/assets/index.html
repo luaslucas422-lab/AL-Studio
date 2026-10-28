@@ -359,7 +359,7 @@ body.portrait .page-scroll{top:calc(var(--safe)*.6 + 270px)}
    Platform bridge
    ===================================================================== */
 const NATIVE = typeof window.ALBridge !== "undefined";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const call = (fn, ...a) => { try{ return NATIVE ? ALBridge[fn](...a) : undefined; }catch(e){ return undefined; } };
 const store = {
   load(){ try{ const raw = NATIVE ? ALBridge.loadState() : localStorage.getItem("alstudio"); return raw ? JSON.parse(raw) : null; }catch(e){ return null; } },
@@ -448,7 +448,7 @@ const DEFAULTS = {
   v:3, accent:"#4f8cff", wallpaper:"aurora", photo:null, wpDim:"med", wpBlur:false, wpAnim:true,
   tile:"m", tileStyle:"gradient", tileShape:"rounded", font:"modern", greeting:true,
   clock24:true, seconds:false, name:"", showQS:true, showSites:true, showAll:true, motion:"full", splash:true,
-  safe:"med", saver:"5", boot:true, landscape:true,
+  safe:"med", saver:"5", boot:true, landscape:true, ui:"tv", realIcons:"all", realIconsFor:{},
   sound:{pack:"airy", vol:"med", nav:true, custom:{}},
   favs:DEFAULT_APPS, sites:DEFAULT_SITES, hidden:[],
   adblock:false, vpn:{configs:[]}
@@ -459,6 +459,7 @@ function loadState(){
   const s = Object.assign(clone(DEFAULTS), saved);
   s.sound = Object.assign(clone(DEFAULTS.sound), saved.sound || {}); s.sound.custom = s.sound.custom || {};
   s.vpn = Object.assign({configs:[]}, saved.vpn || {});
+  if(!s.realIconsFor || typeof s.realIconsFor !== "object") s.realIconsFor = {};
   if(!saved.v || saved.v < 2){
     const oldFavs = Array.isArray(saved.favs) ? saved.favs : [];
     const oldIds = ["yt","nf","pv","rte","sp","tw"];
@@ -708,8 +709,20 @@ function resolveApp(f){
 const itemColors = f => f.c1 ? [f.c1, f.c2] : hashColor(f.name);
 function displayName(f){ const r = f.kind==="app" ? resolveApp(f) : null; return (f.want && f.want.useAppName && r) ? r.name : f.name; }
 function isMissing(f){ return f.kind === "app" && NATIVE && appsLoaded && !resolveApp(f) && !f.pkg; }
+// "Accurate icons": the real app/website icon, or AL Studio's matching style icon.
+function realKey(f){
+  if(f.kind === "web") return "web:" + hostOf(f.url);
+  const r = resolveApp(f);
+  return r ? r.pkg : (f.pkg || "id:" + f.id);
+}
+function useReal(f){
+  if(S.realIcons === "none") return false;
+  if(S.realIcons === "custom") return S.realIconsFor[realKey(f)] !== false;
+  return true;
+}
 function iconFor(f){
   if(f.iconMode === "glyph") return {type:"glyph", glyph:f.glyph || "grid"};
+  if(!useReal(f)) return {type:"glyph", glyph:f.glyph || (f.kind === "web" ? "globe" : guessGlyphKey(f.name))};
   if(f.kind === "app"){ const r = resolveApp(f); const src = (r && r.icon) || f.icon; return src ? {type:"appimg", src, glyph:f.glyph || "grid"} : {type:"glyph", glyph:f.glyph || guessGlyphKey(f.name)}; }
   const h = hostOf(f.url);
   return h ? {type:"img", src:`https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(h)}`, glyph:f.glyph || "globe"} : {type:"glyph", glyph:f.glyph || "globe"};
@@ -977,6 +990,7 @@ const layerStack = [], returnFocus = [];
 function openLayer(id){
   const L = $("#"+id);
   returnFocus.push(document.activeElement);
+  L.style.zIndex = 20 + layerStack.length * 2;   // newest menu always on top
   L.classList.add("open"); layerStack.push(L);
   requestAnimationFrame(() => { const first = navItems()[0]; first && focusEl(first, true); });
 }
@@ -1147,6 +1161,15 @@ function tabLook(p){
   }
   const up = el("button",{class:"wp upload","data-nav":true}, "+ Upload");
   up.addEventListener("click", uploadWallpaper); wps.append(up);
+  p.append(group("Layout",
+    seg(null, [["tv","TV UI"],["android","Android UI"]], () => S.ui, v => switchUI(v)),
+    el("div",{style:"height:12px"}),
+    el("div",{class:"card-note"}, el("b",{},"TV UI"), " is the big-screen layout with the featured banner. ", el("b",{},"Android UI"), " is the earlier AL Studio layout: one scrolling home screen, like a phone or tablet. Your apps, websites and settings stay the same.")));
+  p.append(group("Accurate icons",
+    seg("Use each app's real icon", [["all","All apps"],["custom","Choose apps"],["none","Off"]], () => S.realIcons, v => { S.realIcons = v; refreshIcons(); setTimeout(renderSettingsKeepFocus, 0); }),
+    el("div",{style:"height:12px"}),
+    S.realIcons === "custom" ? optAction("Choose which apps", `${countReal()} using their real icon`, openRealIconPicker) : null,
+    el("div",{class:"card-note"}, "When it's off, apps and websites get AL Studio's own matching icons instead, so everything looks the same style.")));
   p.append(group("Accent colour", acc));
   p.append(group("Background", wps,
     segKey("Darken background", [["none","None"],["low","Low"],["med","Medium"],["high","High"]], "wpDim"),
@@ -1163,6 +1186,36 @@ function tabLook(p){
     el("div",{style:"height:14px"}),
     toggleKey("Opening screen", "Show the app's icon full-screen while it opens", "splash")));
 }
+function iconEntries(){
+  const seen = new Set(), out = [];
+  const add = f => { const k = realKey(f); if(seen.has(k)) return; seen.add(k); out.push({key:k, item:f}); };
+  S.favs.forEach(add); S.sites.forEach(add); visibleApps().forEach(a => add(appItem(a)));
+  return out;
+}
+function countReal(){ return iconEntries().filter(e => S.realIconsFor[e.key] !== false).length; }
+function refreshIcons(){ save(); drawRows(); drawApps(); heroKey = null; const a = document.activeElement; if(a && a._hero && !layerStack.length) showHero(a._hero()); }
+function openRealIconPicker(){
+  const wrap = el("div",{class:"list-scroll"});
+  for(const {key, item} of iconEntries()){
+    const real = item.kind === "web" ? (hostOf(item.url) ? `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostOf(item.url))}` : null) : ((resolveApp(item) || {}).icon || item.icon);
+    const pic = real ? el("img",{src:real, alt:"", style:"width:44px;height:44px;object-fit:contain;border-radius:10px"}) : svg(G[item.glyph || guessGlyphKey(item.name)] || G.grid);
+    if(!real) pic.setAttribute("style","width:40px;height:40px");
+    const b = el("button",{class:"opt","aria-pressed":String(S.realIconsFor[key] !== false),"data-nav":true,"data-snd":"none"},
+      el("span",{class:"lead"}, pic, el("span",{}, displayName(item), el("span",{class:"hint"}, item.kind === "web" ? "Website" : "App"))), el("span",{class:"toggle"}));
+    b.addEventListener("click", () => { const on = S.realIconsFor[key] === false; if(on) delete S.realIconsFor[key]; else S.realIconsFor[key] = false; b.setAttribute("aria-pressed", String(on)); Sound.play("toggle"); refreshIcons(); });
+    wrap.append(b);
+  }
+  picker("Accurate icons", "Turn on the apps that should use their real icon.", wrap);
+  const done = $("#pClose"); done.onclick = () => { closeTop(); renderSettingsKeepFocus(); };
+}
+function switchUI(v){
+  S.ui = v; store.save(S);
+  if(v === "android"){
+    if(NATIVE){ location.href = "classic.html"; return; }
+    toast("Android UI opens in the app (this preview only shows the TV UI)");
+  }
+}
+
 async function uploadWallpaper(){
   const file = await pickFile("image/*"); if(!file) return;
   const url = URL.createObjectURL(file), img = new Image();
@@ -1487,6 +1540,7 @@ window.ALHome = function(){ hideSplash(); hideSaver(); closeAll(); if(page !== "
    Start
    ===================================================================== */
 function endBoot(){ const b = $("#boot"); if(b.classList.contains("gone")) return; b.classList.add("gone"); const t = $("#favs .card"); t && focusEl(t, true); idleReset(); }
+if(NATIVE && S.ui === "android") location.replace("classic.html");
 $("#brandMark").innerHTML = LOGO;
 $("#bootMark").innerHTML = LOGO;
 $("#settingsBtn").append(svg(UI.gear));

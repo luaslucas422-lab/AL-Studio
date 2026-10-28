@@ -116,7 +116,7 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
-        web.loadUrl(UI_URL);
+        web.loadUrl(startPage());
         web.requestFocus();
 
         IntentFilter f = new IntentFilter();
@@ -132,6 +132,15 @@ public class MainActivity extends Activity {
         if (net.adblockWanted() && VpnService.prepare(this) == null) net.setAdblock(true);
 
         goImmersive();
+    }
+
+    /** Opens the layout the person picked last: TV UI (index.html) or Android UI (classic.html). */
+    private String startPage() {
+        try {
+            String st = prefs.getString("state", null);
+            if (st != null && "android".equals(new JSONObject(st).optString("ui"))) return "file:///android_asset/classic.html";
+        } catch (Exception ignored) {}
+        return UI_URL;
     }
 
     @Override
