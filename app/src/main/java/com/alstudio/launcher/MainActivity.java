@@ -157,6 +157,78 @@ public class MainActivity extends Activity {
         if (web != null) web.evaluateJavascript("window.ALOnRunning && ALOnRunning(" + Hosted.json(this) + ")", null);
     }
 
+    private void pushNet() {
+        if (web != null && net != null) web.evaluateJavascript("window.ALOnNet && ALOnNet(" + net.statusJson() + ")", null);
+    }
+
+    /** Runs the action now if the VPN permission is already granted, otherwise asks first. */
+    private void withVpnPermission(Runnable action, Runnable onDenied) {
+        Intent ask = VpnService.prepare(this);
+        if (ask == null) { action.run(); return; }
+        pendingNet = action;
+        pendingDenied = onDenied;
+        try { startActivityForResult(ask, REQ_VPN); }
+        catch (Exception e) { pendingNet = null; if (onDenied != null) onDenied.run(); }
+    }
+    private Runnable pendingDenied;
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) goImmersive();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void goImmersive() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN);
+    }
+
+    // Home pressed while we're already the home screen: jump back to the top.
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (web != null) web.evaluateJavascript("window.ALHome && ALHome()", null);
+    }
+
+    // A home screen never closes on Back; the page decides what Back does.
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        if (web != null) web.evaluateJavascript("window.ALBack && ALBack()", null);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        // Some TV remotes send Back as BUTTON_B; treat it the same.
+        if (e.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B && e.getAction() == KeyEvent.ACTION_UP) {
+            onBackPressed();
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_VPN) {
+            Runnable ok = pendingNet, no = pendingDenied;
+            pendingNet = null; pendingDenied = null;
+            if (res == RESULT_OK) { if (ok != null) ok.run(); }
+            else { if (no != null) no.run(); toast("VPN permission is needed for that"); pushNet(); }
+            return;
+        }
+        if (req == PICK_FILE && fileCallback != null) {
+            fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+            fileCallback = null;
+        }
+    }
+
     @Override
     protected void onDestroy() {
         try { unregisterReceiver(packageReceiver); } catch (Exception ignored) {}

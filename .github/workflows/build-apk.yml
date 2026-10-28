@@ -25,7 +25,7 @@ jobs:
           set -o pipefail
           if ! gradle :app:assembleRelease :appbar:assembleRelease --no-daemon --console=plain 2>&1 | tee build.log; then
             # Surface the real errors as annotations so they show on the run page
-            grep -E "error:|e: |What went wrong|Could not|FAILURE|> " build.log | grep -v "^> Task" | head -40 | while IFS= read -r line; do
+            grep -E "error:|symbol:|location:|e: |What went wrong|Could not|FAILURE|> " build.log | grep -v "^> Task" | sed -E 's#^.*/src/main/java/##; s/error:/ERR/' | head -45 | while IFS= read -r line; do
               echo "::error::${line//%/%25}"
             done
             exit 1
