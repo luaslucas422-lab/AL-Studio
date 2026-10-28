@@ -125,6 +125,9 @@ body.shape-round{--radius:36px}
 .card.small .ci.glyph svg,.card.site .ci.glyph svg{width:calc(60px*var(--k));height:calc(60px*var(--k))}
 .card .ci.img{width:calc(92px*var(--k));height:calc(92px*var(--k));border-radius:calc(24px*var(--k));background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.3)}
 .card .ci.img img{width:calc(58px*var(--k));height:calc(58px*var(--k));object-fit:contain}
+.card .run{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:7px;font-size:15px;font-weight:700;padding:4px 11px 4px 9px;border-radius:99px;background:rgba(0,0,0,.45);color:#fff;backdrop-filter:blur(6px)}
+.card .run i{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e;animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
 .card .badge{position:absolute;right:14px;top:14px;font-size:16px;font-weight:800;padding:4px 12px;border-radius:99px;background:#fff;color:#111}
 .card.add{background:rgba(255,255,255,.05);border:3px dashed rgba(255,255,255,.28);box-shadow:none}
 .card.add::after{display:none}
@@ -185,7 +188,7 @@ body.shape-round{--radius:36px}
 .saver-clock .d{font-size:34px;color:rgba(255,255,255,.75);margin-top:10px}
 
 /* ---------- Layers (menus, settings) ---------- */
-.layer{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:40px}
+.layer{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(3,4,8,.78);padding:40px}
 .layer.open{display:flex;animation:fade calc(.2s*var(--speed)) ease}
 @keyframes fade{from{opacity:0}}
 .dlg{width:min(680px,100%);max-height:88%;overflow:auto;background:rgba(22,24,36,.97);border:1px solid var(--line);border-radius:30px;padding:34px;box-shadow:0 40px 100px rgba(0,0,0,.6);animation:pop calc(.22s*var(--speed)) cubic-bezier(.2,.8,.2,1);scrollbar-width:none}
@@ -312,6 +315,7 @@ body.portrait .page-scroll{top:calc(var(--safe)*.6 + 270px)}
   <section class="page" id="pageHome">
     <div id="hero"></div>
     <div id="rowsView"><div id="rows">
+      <div class="row" id="runRow" hidden><h2>Running in AL Studio</h2><div class="strip" id="runStrip"></div></div>
       <div class="row" id="favRow"><h2>Your apps</h2><div class="strip" id="favs"></div></div>
       <div class="row" id="siteRow"><h2>Websites</h2><div class="strip" id="sites"></div></div>
       <div class="row" id="qsRow"><h2>Quick settings</h2><div class="strip" id="qs"></div></div>
@@ -346,7 +350,7 @@ body.portrait .page-scroll{top:calc(var(--safe)*.6 + 270px)}
   </div></div>
   <div class="layer" id="settings"><div class="panel" id="panel"></div></div>
 
-  <div id="loader"><div class="load-box"><div class="load-icon" id="loadIcon"></div><div class="load-name" id="loadName"></div><div class="load-sub">Opening…</div><div class="load-bar"><i></i></div></div></div>
+  <div id="loader"><div class="load-box"><div class="load-icon" id="loadIcon"></div><div class="load-name" id="loadName"></div><div class="load-sub" id="loadSub">Opening in AL Studio…</div><div class="load-bar"><i></i></div></div></div>
   <div id="saver"><div id="saverWall"></div><div class="saver-clock" id="saverClock"><div class="t" id="saverTime"></div><div class="d" id="saverDate"></div></div></div>
   <div id="boot"><div class="boot-box"><div class="boot-mark" id="bootMark"></div><div class="boot-name">AL STUDIO</div></div></div>
   <div id="toast"></div>
@@ -359,7 +363,7 @@ body.portrait .page-scroll{top:calc(var(--safe)*.6 + 270px)}
    Platform bridge
    ===================================================================== */
 const NATIVE = typeof window.ALBridge !== "undefined";
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const call = (fn, ...a) => { try{ return NATIVE ? ALBridge[fn](...a) : undefined; }catch(e){ return undefined; } };
 const store = {
   load(){ try{ const raw = NATIVE ? ALBridge.loadState() : localStorage.getItem("alstudio"); return raw ? JSON.parse(raw) : null; }catch(e){ return null; } },
@@ -448,7 +452,7 @@ const DEFAULTS = {
   v:3, accent:"#4f8cff", wallpaper:"aurora", photo:null, wpDim:"med", wpBlur:false, wpAnim:true,
   tile:"m", tileStyle:"gradient", tileShape:"rounded", font:"modern", greeting:true,
   clock24:true, seconds:false, name:"", showQS:true, showSites:true, showAll:true, motion:"full", splash:true,
-  safe:"med", saver:"5", boot:true, landscape:true, ui:"tv", realIcons:"all", realIconsFor:{},
+  safe:"med", saver:"5", boot:true, landscape:true, ui:"tv", realIcons:"all", realIconsFor:{}, webInApp:true,
   sound:{pack:"airy", vol:"med", nav:true, custom:{}},
   favs:DEFAULT_APPS, sites:DEFAULT_SITES, hidden:[],
   adblock:false, vpn:{configs:[]}
@@ -479,6 +483,7 @@ function save(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => store.sav
 store.save(S);
 
 let APPS = [], appsLoaded = false, page = "home";
+let RUNNING = {apps:[], site:null};
 let NET = {adblock:false, adblockActive:false, vpn:"off", id:null, name:null, error:null};
 const uid = () => Math.random().toString(36).slice(2,9);
 
@@ -748,7 +753,7 @@ function cell(card, label, heroFn){
 function makeItemCell(f, i, row, size){
   const c = itemColors(f);
   const card = el("button",{class:"card " + size, style:`--c1:${c[0]};--c2:${c[1]}`, "data-nav":true, "data-snd":"none", "aria-label":displayName(f)},
-    iconNode(iconFor(f)), isMissing(f) ? el("span",{class:"badge"},"Get") : null);
+    iconNode(iconFor(f)), isMissing(f) ? el("span",{class:"badge"},"Get") : null, isRunning(f) ? el("span",{class:"run"}, el("i"), "Running") : null);
   card.addEventListener("click", () => openItem(f));
   longPress(card, () => itemSheet(row, i));
   card._open = () => itemSheet(row, i);
@@ -762,7 +767,7 @@ function addCell(label, size, desc, fn){
 // Re-render something without losing the remote's place.
 function keepFocus(draw){
   const a = document.activeElement;
-  const box = a && a.closest && a.closest("#favs, #sites, #qs, #allStrip, #apps, #sitesGrid");
+  const box = a && a.closest && a.closest("#runStrip, #favs, #sites, #qs, #allStrip, #apps, #sitesGrid");
   const idx = box ? [...box.querySelectorAll("[data-nav]")].indexOf(a) : -1;
   draw();
   if(box && idx >= 0){ const items = $("#" + box.id).querySelectorAll("[data-nav]"); const n = items[Math.min(idx, items.length-1)]; if(n) focusEl(n, true); }
@@ -782,8 +787,17 @@ function drawRows(){
   grid.append(addCell("Add a website", "site", "Type an address and it'll get its own tile.", () => openForm({mode:"add"})));
   if(!heroIdle){ const a = document.activeElement; if(a && a._hero){ heroKey = null; showHero(a._hero()); } }
 }
+function isRunning(f){
+  if(f.kind === "web") return false;
+  const r = resolveApp(f), pkg = r ? r.pkg : f.pkg;
+  return !!pkg && RUNNING.apps.includes(pkg);
+}
+function openSite(f){
+  if(NATIVE && S.webInApp !== false) call("openSite", f.url, displayName(f));
+  else openUrl(f.url);
+}
 function openItem(f){
-  if(f.kind === "web"){ splash(f, () => openUrl(f.url)); return; }
+  if(f.kind === "web"){ splash(f, () => openSite(f)); return; }
   const r = resolveApp(f);
   if(r || f.pkg){ splash(f, () => launchApp(r || f)); return; }
   if(!NATIVE){ splash(f, () => {}); return; }
@@ -815,7 +829,8 @@ function moveItem(row, i, dir){
 
 /* ---------- App opening splash ---------- */
 let splashTimer = null;
-function splash(f, go){
+function splash(f, go, sub){
+  $("#loadSub").textContent = sub || (f.kind === "web" && !(NATIVE && S.webInApp !== false) ? "Opening in your browser…" : "Opening in AL Studio…");
   if(!S.splash){ Sound.play("launch"); go(); return; }
   const c = itemColors(f), L = $("#loader"), box = $("#loadIcon");
   L.style.setProperty("--lc1", c[0]); L.style.setProperty("--lc2", c[1]);
@@ -833,6 +848,53 @@ function splash(f, go){
 function hideSplash(){ $("#loader").classList.remove("open"); }
 window.ALResume = () => { setTimeout(hideSplash, 250); idleReset(); };
 document.addEventListener("visibilitychange", () => { if(!document.hidden){ setTimeout(hideSplash, 250); idleReset(); } });
+
+/* ---------- Running in AL Studio ---------- */
+function drawRunning(){
+  const strip = $("#runStrip"); strip.replaceChildren();
+  const apps = RUNNING.apps.map(p => APPS.find(a => a.pkg === p)).filter(Boolean);
+  for(const a of apps){
+    const f = appItem(a), c = hashColor(a.name);
+    const card = el("button",{class:"card big", style:`--c1:${c[0]};--c2:${c[1]}`, "data-nav":true, "data-snd":"none", "aria-label":a.name},
+      iconNode(iconFor(f)), el("span",{class:"run"}, el("i"), "Running"));
+    const back = () => splash(f, () => launchApp(a), "Returning to " + a.name + "…");
+    card.addEventListener("click", back);
+    const opts = () => sheet(a.name, "Running in AL Studio", [
+      ["Go back to it", UI.play, back],
+      ["Close", UI.x, () => closeRunning(a.pkg)]
+    ]);
+    longPress(card, opts); card._open = opts;
+    strip.append(cell(card, a.name, () => ({key:"run:" + a.pkg, kicker:"Running in AL Studio", title:a.name, desc:"Press OK to go straight back to it.", c1:c[0], c2:c[1], icon:iconFor(f), okLabel:"Go back"})));
+  }
+  if(RUNNING.site && RUNNING.site.url){
+    const site = RUNNING.site, f = {kind:"web", id:"site", name:site.title || hostOf(site.url), url:site.url, glyph:"globe"}, c = hashColor(site.url);
+    const card = el("button",{class:"card big", style:`--c1:${c[0]};--c2:${c[1]}`, "data-nav":true, "data-snd":"none", "aria-label":f.name}, iconNode(iconFor(f)), el("span",{class:"run"}, el("i"), "Open"));
+    const back = () => splash(f, () => call("resumeSite"), "Returning to " + hostOf(site.url).replace(/^www\./,"") + "…");
+    card.addEventListener("click", back);
+    const opts = () => sheet(f.name, hostOf(site.url), [["Go back to it", UI.play, back], ["Close", UI.x, () => closeRunning("site")]]);
+    longPress(card, opts); card._open = opts;
+    strip.append(cell(card, f.name, () => ({key:"run:site" + site.url, kicker:"Open in AL Studio · " + hostOf(site.url).replace(/^www\./,""), title:f.name, desc:"Press OK to go back to this page.", c1:c[0], c2:c[1], icon:iconFor(f), okLabel:"Go back"})));
+  }
+  const had = !$("#runRow").hidden;
+  $("#runRow").hidden = strip.children.length === 0;
+  if(had !== !$("#runRow").hidden){
+    // Keep the remote on the same row after the Running row appears or goes away.
+    const a = document.activeElement; const ri = a && rowOf(a); if(ri >= 0) activeRow = ri;
+    requestAnimationFrame(snapRows);
+  }
+}
+function closeRunning(pkg){
+  if(NATIVE) call("closeRunning", pkg);
+  if(pkg === "site") RUNNING.site = null; else RUNNING.apps = RUNNING.apps.filter(p => p !== pkg);
+  keepFocus(() => { drawRunning(); drawRows(); });
+  if(!document.activeElement || !document.activeElement.getClientRects().length){ const t = $("#favs .card"); t && focusEl(t, true); }
+  toast("Closed");
+}
+window.ALOnRunning = function(r){
+  if(!r || typeof r !== "object") return;
+  RUNNING = {apps: Array.isArray(r.apps) ? r.apps : [], site: r.site || null};
+  keepFocus(() => { drawRunning(); drawRows(); });
+};
 
 /* =====================================================================
    Quick settings
@@ -912,12 +974,18 @@ function appSheet(a){
   ]);
 }
 function pinApp(a){ S.favs.push({id:uid(), kind:"app", name:a.name, pkg:a.pkg, cls:a.cls||"", icon:a.icon||null, glyph:guessGlyphKey(a.name)}); save(); renderRows(); toast(`${a.name} added to Your apps`); }
-function launchApp(a){ if(NATIVE) call("launchApp", a.pkg, a.cls || ""); else toast(`${a.name} opens on the real device`); }
+function launchApp(a){
+  if(NATIVE){ call("launchApp", a.pkg, a.cls || ""); return; }
+  toast(`${a.name} opens on the real device`);
+  // Preview: show it in the Running row like the app would
+  RUNNING.apps = [a.pkg].concat(RUNNING.apps.filter(p => p !== a.pkg)).slice(0, 8);
+  setTimeout(drawRunning, 1900);
+}
 function openUrl(url){ if(NATIVE) call("openUrl", url); else window.open(url, "_blank", "noopener"); }
 window.ALOnApps = function(list){
   APPS = (Array.isArray(list) ? list : []).sort((x,y) => x.name.localeCompare(y.name));
   appsLoaded = true;
-  renderRows(); renderApps();
+  renderRows(); renderApps(); keepFocus(drawRunning);
 };
 $("#search").addEventListener("input", () => drawApps());
 
@@ -1239,6 +1307,7 @@ function tabHome(p){
     toggleKey("Start-up animation", "The AL Studio logo when it starts", "boot"),
     toggleKey("Always landscape", "Keep the TV layout even when a phone or tablet is turned", "landscape", () => call("setLandscape", S.landscape)),
     optAction("Preview the screensaver", null, () => { closeAll(); setTimeout(showSaver, 300); })));
+  p.append(group("Apps in AL Studio", ...appsInStudioGroup()));
   p.append(group("Clock & greeting", nameField,
     toggleKey("Greeting", "\"Good evening\" above the clock", "greeting"),
     toggleKey("24-hour clock", null, "clock24"),
@@ -1255,6 +1324,23 @@ function tabHome(p){
       const have = new Set(S.sites.map(f => f.id)), missing = clone(DEFAULT_SITES).filter(d => !have.has(d.id));
       S.sites = S.sites.concat(missing); save(); renderRows(); toast(missing.length ? "Default websites restored" : "They're all there already");
     })));
+}
+function appsInStudioGroup(){
+  let st = {service:false, show:true, windowed:false};
+  try{ if(NATIVE) st = Object.assign(st, JSON.parse(call("appBarState") || "{}")); }catch(e){}
+  const out = [];
+  out.push(el("div",{class:"statusline"}, el("span",{class:"dot " + (st.service ? "ok" : "")}),
+    NATIVE ? (st.service ? "AL Studio app bar is on" : "AL Studio app bar is off") : "The app bar works in the real app"));
+  if(NATIVE && !st.service){
+    out.push(optAction("Turn on the app bar", "Opens Accessibility settings. Pick \"AL Studio app bar\" and turn it on.", () => call("openAccessibility")));
+    out.push(el("div",{class:"card-note"}, el("b",{},"Greyed out? "), "On Android 13 and newer, apps installed from a file need one extra step first: open AL Studio's App info, tap the ⋮ menu, choose ", el("b",{},"Allow restricted settings"), ", then try again."));
+    out.push(optAction("Open AL Studio's App info", null, () => call("openAppInfo")));
+  }
+  out.push(optToggle("Show the app bar on apps", "Back, AL Studio and Close float on top of any app you open from here, and nowhere else", () => st.show, v => { st.show = v; call("setAppBar", v); }));
+  out.push(toggleKey("Open websites inside AL Studio", "Websites open in AL Studio's own browser instead of a separate browser app", "webInApp"));
+  out.push(optToggle("App windows (experimental)", "Asks Android to open apps as a window inside the screen. Only works on devices with window support; others open full-screen as normal.", () => st.windowed, v => { st.windowed = v; call("setWindowed", v); }));
+  out.push(el("div",{class:"card-note"}, "Android doesn't let one app draw another app inside itself, so apps still run as themselves. AL Studio keeps track of them in the ", el("b",{},"Running"), " row and puts its own bar on top, so they behave like they're part of AL Studio."));
+  return out;
 }
 function tabSound(p){
   p.append(group("Sound pack",
@@ -1550,6 +1636,7 @@ call("setLandscape", S.landscape);
 if(NATIVE){
   call("requestApps", false);
   try{ const st = JSON.parse(call("netStatus") || "null"); if(st) window.ALOnNet(st); }catch(e){}
+  try{ const run = JSON.parse(call("getRunning") || "null"); if(run) window.ALOnRunning(run); }catch(e){}
 }else setTimeout(() => window.ALOnApps(SAMPLE_APPS), 300);
 if(S.boot && S.motion !== "off"){ setTimeout(() => Sound.play("start"), 250); setTimeout(endBoot, 2300); }
 else { $("#boot").classList.add("gone"); requestAnimationFrame(() => { const t = $("#favs .card"); t && focusEl(t, true); }); }

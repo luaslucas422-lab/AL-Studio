@@ -159,7 +159,7 @@ body.shape-round{--radius:30px}
 @keyframes bar{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}
 
 /* ---------- Layers ---------- */
-.layer{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:16px}
+.layer{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(3,4,8,.74);padding:16px}
 .layer.open{display:flex;animation:fade calc(.18s*var(--speed)) ease}
 @keyframes fade{from{opacity:0}}
 .dlg{width:min(480px,100%);max-height:90vh;overflow:auto;background:rgba(22,24,36,.97);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:pop calc(.2s*var(--speed)) cubic-bezier(.2,.8,.2,1)}
@@ -337,7 +337,7 @@ body.motion-off *{animation:none!important;transition:none!important}
    Platform bridge
    ===================================================================== */
 const NATIVE = typeof window.ALBridge !== "undefined";
-const VERSION = "0.4.0 · Android UI";
+const VERSION = "0.5.0 · Android UI";
 const call = (fn, ...a) => { try{ return NATIVE ? ALBridge[fn](...a) : undefined; }catch(e){ return undefined; } };
 
 const store = {
@@ -430,7 +430,7 @@ const DEFAULTS = {
   sound:{pack:"airy", vol:"med", nav:true, custom:{}},
   favs:DEFAULT_APPS, sites:DEFAULT_SITES, hidden:[],
   adblock:false, vpn:{configs:[]},
-  ui:"android", realIcons:"all", realIconsFor:{}
+  ui:"android", realIcons:"all", realIconsFor:{}, webInApp:true
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 
@@ -694,7 +694,7 @@ function drawRows(){
   $("#editBtn").classList.toggle("on", editMode);
 }
 function openItem(f, tileEl){
-  if(f.kind === "web"){ splash(f, () => openUrl(f.url)); return; }
+  if(f.kind === "web"){ splash(f, () => { if(NATIVE && S.webInApp !== false) call("openSite", f.url, displayName(f)); else openUrl(f.url); }); return; }
   const r = resolveApp(f);
   if(r || f.pkg){ splash(f, () => launchApp(r || f)); return; }
   if(!NATIVE){ splash(f, () => {}); return; }
@@ -1143,8 +1143,24 @@ async function uploadWallpaper(){
   img.src = url;
 }
 
+function appsInStudioGroup(){
+  let st = {service:false, show:true, windowed:false};
+  try{ if(NATIVE) st = Object.assign(st, JSON.parse(call("appBarState") || "{}")); }catch(e){}
+  const out = [el("div",{class:"statusline"}, el("span",{class:"dot " + (st.service ? "ok" : "")}),
+    NATIVE ? (st.service ? "AL Studio app bar is on" : "AL Studio app bar is off") : "The app bar works in the real app")];
+  if(NATIVE && !st.service){
+    out.push(optAction("Turn on the app bar", "Opens Accessibility settings. Pick \"AL Studio app bar\" and turn it on.", () => call("openAccessibility")));
+    out.push(el("div",{class:"card note"}, el("b",{},"Greyed out? "), "On Android 13 and newer, open AL Studio's App info, tap ⋮, choose ", el("b",{},"Allow restricted settings"), ", then try again."));
+    out.push(optAction("Open AL Studio's App info", null, () => call("openAppInfo")));
+  }
+  out.push(optToggle("Show the app bar on apps", "Back, AL Studio and Close float on top of apps you open from here, and nowhere else", () => st.show, v => { st.show = v; call("setAppBar", v); }));
+  out.push(toggleKey("Open websites inside AL Studio", "Websites open in AL Studio's own browser", "webInApp"));
+  out.push(optToggle("App windows (experimental)", "Opens apps as a window on devices that support it", () => st.windowed, v => { st.windowed = v; call("setWindowed", v); }));
+  return out;
+}
 function tabHome(p){
-  const nameField = el("label",{class:"field"}, el("span",{},"Your name (for the greeting)"), el("input",{maxlength:"24", value:S.name||"", "data-nav":true, placeholder:"e.g. Lucas"}));
+  p.append(group("Apps in AL Studio", ...appsInStudioGroup()));
+  const nameField = el("label",{class:"field"}, el("span",{},"Your name (for the greeting)"), el("input",{maxlength:"24", value:S.name||"", "data-nav":true, placeholder:"Your name"}));
   nameField.querySelector("input").addEventListener("input", e => { S.name = e.target.value.trim(); save(); tick(); });
   p.append(group("Clock & greeting",
     nameField,

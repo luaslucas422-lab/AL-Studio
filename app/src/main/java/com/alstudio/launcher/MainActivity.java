@@ -148,6 +148,20 @@ public class MainActivity extends Activity {
         super.onResume();
         goImmersive();
         if (web != null) web.evaluateJavascript("window.ALResume && ALResume()", null);
+        pushRunning();
+    }
+
+    /** Tells the page which apps (and website) are running in AL Studio. */
+    private void pushRunning() {
+        if (web != null) web.evaluateJavascript("window.ALOnRunning && ALOnRunning(" + Hosted.json(this) + ")", null);
+    }
+
+    private boolean appBarOn() {
+        if (AppBarService.instance != null) return true;
+        try {
+            String list = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return list != null && list.contains(getPackageName() + "/");
+        } catch (Exception e) { return false; }
     }
 
     private void pushNet() {
@@ -302,7 +316,20 @@ public class MainActivity extends Activity {
         }
         if (i == null) { toast("That app isn't installed any more"); scanApps(true); return; }
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-        try { startActivity(i); } catch (Exception e) { toast("Couldn't open that app"); }
+        Bundle opts = null;
+        if (Hosted.windowed(this)) {
+            // App windows (experimental): ask Android to open it as a window inside the screen.
+            // Devices without window support simply ignore this and open it full-screen.
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            int mx = dm.widthPixels / 12, my = dm.heightPixels / 10;
+            android.app.ActivityOptions o = android.app.ActivityOptions.makeBasic();
+            o.setLaunchBounds(new android.graphics.Rect(mx, my, dm.widthPixels - mx, dm.heightPixels - my / 2));
+            opts = o.toBundle();
+        }
+        try {
+            startActivity(i, opts);
+            Hosted.add(this, pkg);
+        } catch (Exception e) { toast("Couldn't open that app"); }
     }
 
     private void openExternal(String url) {
@@ -394,6 +421,71 @@ public class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface
         public String getRemotes() { return remotes(); }
+
+        /** Websites open inside AL Studio's own browser. */
+        @android.webkit.JavascriptInterface
+        public void openSite(String url, String title) {
+            if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) return;
+            main.post(() -> {
+                Intent i = new Intent(MainActivity.this, BrowserActivity.class)
+                        .putExtra(BrowserActivity.EXTRA_URL, url)
+                        .putExtra(BrowserActivity.EXTRA_TITLE, title);
+                startActivity(i);
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void resumeSite() {
+            main.post(() -> {
+                try {
+                    JSONObject site = new JSONObject(Hosted.json(MainActivity.this)).optJSONObject("site");
+                    if (site == null) return;
+                    // Bring the open site back exactly where it was.
+                    Intent i = new Intent(MainActivity.this, BrowserActivity.class)
+                            .putExtra(BrowserActivity.EXTRA_URL, site.optString("url"))
+                            .putExtra(BrowserActivity.EXTRA_TITLE, site.optString("title"))
+                            .putExtra(BrowserActivity.EXTRA_RESUME, true);
+                    startActivity(i);
+                } catch (Exception ignored) {}
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public String getRunning() { return Hosted.json(MainActivity.this); }
+
+        @android.webkit.JavascriptInterface
+        public void closeRunning(String pkg) {
+            if ("site".equals(pkg)) Hosted.setSite(MainActivity.this, null, null);
+            else Hosted.remove(MainActivity.this, pkg);
+            main.post(MainActivity.this::pushRunning);
+        }
+
+        @android.webkit.JavascriptInterface
+        public String appBarState() {
+            return "{\"service\":" + appBarOn() + ",\"show\":" + Hosted.barEnabled(MainActivity.this) + ",\"windowed\":" + Hosted.windowed(MainActivity.this) + "}";
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setAppBar(boolean on) { Hosted.setBar(MainActivity.this, on); }
+
+        @android.webkit.JavascriptInterface
+        public void setWindowed(boolean on) { Hosted.setWindowed(MainActivity.this, on); }
+
+        @android.webkit.JavascriptInterface
+        public void openAccessibility() {
+            main.post(() -> {
+                try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception e) { toast("Accessibility settings aren't available on this device"); }
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void openAppInfo() {
+            main.post(() -> {
+                try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception ignored) {}
+            });
+        }
 
         @android.webkit.JavascriptInterface
         public void setLandscape(boolean on) {

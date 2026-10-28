@@ -57,6 +57,28 @@
             </intent-filter>
         </activity>
 
+        <!-- AL Studio's own browser: websites run inside AL Studio, in their own task -->
+        <activity
+            android:name=".BrowserActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.alstudio.launcher.browser"
+            android:excludeFromRecents="true"
+            android:theme="@style/BrowserTheme"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density" />
+
+        <!-- AL Studio app bar: shows Back / Home / Close over apps opened from AL Studio -->
+        <service
+            android:name=".AppBarService"
+            android:exported="true"
+            android:label="@string/appbar_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/appbar_service" />
+        </service>
+
         <!-- Ad blocker: captures DNS lookups only and relays them to AdGuard's blocking DNS -->
         <service
             android:name=".AdBlockService"

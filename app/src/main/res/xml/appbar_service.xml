@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AL Studio app bar: only listens for "which app is on screen" so it can show its bar
+     over apps opened from AL Studio. It never reads window content. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="80"
+    android:description="@string/appbar_desc"
+    android:summary="@string/appbar_summary" />
