@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Only apps signed with AL Studio's key can talk to each other through this. -->
+    <permission android:name="com.alstudio.permission.LINK" android:protectionLevel="signature" />
+    <uses-permission android:name="com.alstudio.permission.LINK" />
+
+    <queries>
+        <package android:name="com.alstudio.launcher" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name">
+
+        <!-- The bar itself -->
+        <service
+            android:name=".AppBarService"
+            android:exported="true"
+            android:label="@string/appbar_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/appbar_service" />
+        </service>
+
+        <!-- AL Studio tells the add-on which apps it opened -->
+        <receiver
+            android:name=".LinkReceiver"
+            android:exported="true"
+            android:permission="com.alstudio.permission.LINK">
+            <intent-filter>
+                <action android:name="com.alstudio.appbar.UPDATE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

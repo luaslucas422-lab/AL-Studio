@@ -1,6 +1,7 @@
-package com.alstudio.launcher;
+package com.alstudio.appbar;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -19,7 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * The AL Studio app bar. When an app you opened from AL Studio is on screen, a small
+ * The AL Studio app bar (optional add-on). When an app you opened from AL Studio is on screen, a small
  * AL Studio bar floats on top of it (Back, AL Studio home, the app's name, Close),
  * so the app feels like it's running inside AL Studio. Everywhere else, it stays hidden.
  *
@@ -36,7 +37,7 @@ public class AppBarService extends AccessibilityService {
     private ImageView appIcon;
     private TextView appName;
     private boolean attached = false, expanded = true;
-    private String current;
+    private String current, lastPkg;
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable collapse = () -> setExpanded(false);
 
@@ -51,14 +52,11 @@ public class AppBarService extends AccessibilityService {
     public void onAccessibilityEvent(AccessibilityEvent e) {
         if (e == null || e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || e.getPackageName() == null) return;
         String pkg = e.getPackageName().toString();
-        if (pkg.equals(getPackageName())) {
-            // Our own screens (the launcher or the browser) have their own controls.
-            CharSequence cls = e.getClassName();
-            if (cls != null && (cls.toString().contains("MainActivity") || cls.toString().contains("BrowserActivity"))) hide();
-            return;
-        }
+        if (pkg.equals(getPackageName())) return;              // our own bar
+        if (pkg.equals(LinkState.LAUNCHER)) { hide(); return; } // AL Studio has its own controls
         if (isTransient(pkg)) return;
-        if (Hosted.barEnabled(this) && Hosted.contains(this, pkg)) show(pkg);
+        lastPkg = pkg;
+        if (LinkState.enabled(this) && LinkState.contains(this, pkg)) show(pkg);
         else hide();
     }
 
@@ -160,7 +158,7 @@ public class AppBarService extends AccessibilityService {
 
         rest.addView(iconButton(R.drawable.ic_bar_home, "AL Studio home", v -> goHome()));
         rest.addView(iconButton(R.drawable.ic_bar_close, "Close", v -> {
-            if (current != null) Hosted.remove(this, current);
+            if (current != null) LinkState.close(this, current);
             goHome();
         }));
         full = rest;
@@ -174,6 +172,14 @@ public class AppBarService extends AccessibilityService {
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         lp.y = dp(10);
+    }
+
+    /** Called when AL Studio sends new settings. */
+    void refresh() {
+        h.post(() -> {
+            if (lastPkg != null && LinkState.enabled(this) && LinkState.contains(this, lastPkg)) show(lastPkg);
+            else hide();
+        });
     }
 
     private void setExpanded(boolean on) {
@@ -222,7 +228,7 @@ public class AppBarService extends AccessibilityService {
 
     private void goHome() {
         hide();
-        Intent i = new Intent(this, MainActivity.class);
+        Intent i = new Intent().setComponent(new ComponentName(LinkState.LAUNCHER, LinkState.LAUNCHER + ".MainActivity"));
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         try { startActivity(i); } catch (Exception e) { performGlobalAction(GLOBAL_ACTION_HOME); }
     }

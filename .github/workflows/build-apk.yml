@@ -23,7 +23,7 @@ jobs:
       - name: Build APK
         run: |
           set -o pipefail
-          if ! gradle :app:assembleRelease --no-daemon --console=plain 2>&1 | tee build.log; then
+          if ! gradle :app:assembleRelease :appbar:assembleRelease --no-daemon --console=plain 2>&1 | tee build.log; then
             # Surface the real errors as annotations so they show on the run page
             grep -E "error:|e: |What went wrong|Could not|FAILURE|> " build.log | grep -v "^> Task" | head -40 | while IFS= read -r line; do
               echo "::error::${line//%/%25}"
@@ -31,20 +31,26 @@ jobs:
             exit 1
           fi
 
-      - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk AL-Studio.apk
+      - name: Rename APKs
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk AL-Studio.apk
+          cp appbar/build/outputs/apk/release/appbar-release.apk AL-Studio-AppBar.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: AL-Studio-APK
-          path: AL-Studio.apk
+          path: |
+            AL-Studio.apk
+            AL-Studio-AppBar.apk
 
       - name: Publish to Releases (easy phone download)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: AL Studio build ${{ github.run_number }}
-          files: AL-Studio.apk
+          files: |
+            AL-Studio.apk
+            AL-Studio-AppBar.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

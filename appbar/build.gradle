@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+// AL Studio App Bar: an optional add-on. It lives in its own APK because it uses
+// Android's Accessibility permission, which Play Protect warns about for apps
+// installed from a file. Keeping it separate means AL Studio itself installs cleanly.
+android {
+    namespace 'com.alstudio.appbar'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.alstudio.appbar'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    // Same key as AL Studio, so the two can trust each other.
+    signingConfigs {
+        alstudio {
+            storeFile file('../app/alstudio.keystore')
+            storePassword 'alstudio123'
+            keyAlias 'alstudio'
+            keyPassword 'alstudio123'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.alstudio
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint { abortOnError false }
+}

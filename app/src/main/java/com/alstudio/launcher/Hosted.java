@@ -1,6 +1,7 @@
 package com.alstudio.launcher;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 
 import org.json.JSONArray;
@@ -35,6 +36,7 @@ final class Hosted {
             if (!pkg.equals(o) && !o.isEmpty()) out.put(o);
         }
         p(c).edit().putString("apps", out.toString()).apply();
+        sync(c);
     }
 
     static synchronized void remove(Context c, String pkg) {
@@ -44,6 +46,21 @@ final class Hosted {
             if (!pkg.equals(o)) out.put(o);
         }
         p(c).edit().putString("apps", out.toString()).apply();
+        sync(c);
+    }
+
+    // ---------- Link to the optional app bar add-on ----------
+    static final String ADDON = "com.alstudio.appbar";
+    static final String PERMISSION = "com.alstudio.permission.LINK";
+
+    /** Sends the Running list and the on/off switch to the add-on (only apps with AL Studio's key can receive it). */
+    static void sync(Context c) {
+        try {
+            Intent i = new Intent(ADDON + ".UPDATE").setPackage(ADDON)
+                    .putExtra("apps", apps(c).toString())
+                    .putExtra("enabled", barEnabled(c));
+            c.sendBroadcast(i, PERMISSION);
+        } catch (Exception ignored) {}
     }
 
     static synchronized boolean contains(Context c, String pkg) {
@@ -76,8 +93,9 @@ final class Hosted {
     }
 
     // Settings the app bar reads.
-    static boolean barEnabled(Context c) { return p(c).getBoolean("bar", true); }
-    static void setBar(Context c, boolean on) { p(c).edit().putBoolean("bar", on).apply(); }
+    // The app bar is off until you switch it on in Settings → Look.
+    static boolean barEnabled(Context c) { return p(c).getBoolean("bar2", false); }
+    static void setBar(Context c, boolean on) { p(c).edit().putBoolean("bar2", on).apply(); sync(c); }
     static boolean windowed(Context c) { return p(c).getBoolean("windowed", false); }
     static void setWindowed(Context c, boolean on) { p(c).edit().putBoolean("windowed", on).apply(); }
 }

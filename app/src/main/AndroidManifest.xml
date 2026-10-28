@@ -3,6 +3,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Lets AL Studio and its optional app bar add-on (same signing key only) talk to each other -->
+    <permission android:name="com.alstudio.permission.LINK" android:protectionLevel="signature" />
+    <uses-permission android:name="com.alstudio.permission.LINK" />
+
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -20,6 +24,7 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <package android:name="com.alstudio.appbar" />
     </queries>
 
     <application
@@ -67,17 +72,15 @@
             android:theme="@style/BrowserTheme"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density" />
 
-        <!-- AL Studio app bar: shows Back / Home / Close over apps opened from AL Studio -->
-        <service
-            android:name=".AppBarService"
+        <!-- The app bar add-on's Close button -->
+        <receiver
+            android:name=".LinkReceiver"
             android:exported="true"
-            android:label="@string/appbar_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            android:permission="com.alstudio.permission.LINK">
             <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
+                <action android:name="com.alstudio.launcher.CLOSE_HOSTED" />
             </intent-filter>
-            <meta-data android:name="android.accessibilityservice" android:resource="@xml/appbar_service" />
-        </service>
+        </receiver>
 
         <!-- Ad blocker: captures DNS lookups only and relays them to AdGuard's blocking DNS -->
         <service

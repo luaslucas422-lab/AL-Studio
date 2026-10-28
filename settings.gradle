@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "AL Studio"
-include ':app'
+include ':app', ':appbar'

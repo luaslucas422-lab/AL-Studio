@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="appbar_label">AL Studio app bar</string>
-    <string name="appbar_summary">Back, Home and Close on top of apps you open from AL Studio</string>
-    <string name="appbar_desc">Shows the AL Studio bar (Back, Home, Close) on top of apps you open from AL Studio, and nowhere else. It only notices which app is on screen so it knows when to show the bar. It never reads, records or changes anything inside your apps.</string>
-</resources>

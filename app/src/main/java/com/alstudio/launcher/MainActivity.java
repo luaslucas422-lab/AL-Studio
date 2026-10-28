@@ -126,6 +126,7 @@ public class MainActivity extends Activity {
         f.addDataScheme("package");
         registerReceiver(packageReceiver, f);
 
+        Hosted.sync(this);   // keep the app bar add-on (if installed) up to date
         net = NetController.get(this);
         net.setListener(() -> main.post(this::pushNet));
         // Bring the ad blocker back if it was on and Android still allows it.
@@ -154,86 +155,6 @@ public class MainActivity extends Activity {
     /** Tells the page which apps (and website) are running in AL Studio. */
     private void pushRunning() {
         if (web != null) web.evaluateJavascript("window.ALOnRunning && ALOnRunning(" + Hosted.json(this) + ")", null);
-    }
-
-    private boolean appBarOn() {
-        if (AppBarService.instance != null) return true;
-        try {
-            String list = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            return list != null && list.contains(getPackageName() + "/");
-        } catch (Exception e) { return false; }
-    }
-
-    private void pushNet() {
-        if (web != null && net != null) web.evaluateJavascript("window.ALOnNet && ALOnNet(" + net.statusJson() + ")", null);
-    }
-
-    /** Runs the action now if the VPN permission is already granted, otherwise asks first. */
-    private void withVpnPermission(Runnable action, Runnable onDenied) {
-        Intent ask = VpnService.prepare(this);
-        if (ask == null) { action.run(); return; }
-        pendingNet = action;
-        pendingDenied = onDenied;
-        try { startActivityForResult(ask, REQ_VPN); }
-        catch (Exception e) { pendingNet = null; if (onDenied != null) onDenied.run(); }
-    }
-    private Runnable pendingDenied;
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) goImmersive();
-    }
-
-    @SuppressWarnings("deprecation")
-    private void goImmersive() {
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN);
-    }
-
-    // Home pressed while we're already the home screen: jump back to the top.
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        if (web != null) web.evaluateJavascript("window.ALHome && ALHome()", null);
-    }
-
-    // A home screen never closes on Back; the page decides what Back does.
-    @SuppressWarnings("deprecation")
-    @Override
-    public void onBackPressed() {
-        if (web != null) web.evaluateJavascript("window.ALBack && ALBack()", null);
-    }
-
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent e) {
-        // Some TV remotes send Back as BUTTON_B; treat it the same.
-        if (e.getKeyCode() == KeyEvent.KEYCODE_BUTTON_B && e.getAction() == KeyEvent.ACTION_UP) {
-            onBackPressed();
-            return true;
-        }
-        return super.dispatchKeyEvent(e);
-    }
-
-    @Override
-    protected void onActivityResult(int req, int res, Intent data) {
-        super.onActivityResult(req, res, data);
-        if (req == REQ_VPN) {
-            Runnable ok = pendingNet, no = pendingDenied;
-            pendingNet = null; pendingDenied = null;
-            if (res == RESULT_OK) { if (ok != null) ok.run(); }
-            else { if (no != null) no.run(); toast("VPN permission is needed for that"); pushNet(); }
-            return;
-        }
-        if (req == PICK_FILE && fileCallback != null) {
-            fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
-            fileCallback = null;
-        }
     }
 
     @Override
@@ -460,16 +381,27 @@ public class MainActivity extends Activity {
             main.post(MainActivity.this::pushRunning);
         }
 
+        /** {addon: add-on installed, service: turned on in Accessibility, show: switched on in AL Studio, windowed} */
         @android.webkit.JavascriptInterface
         public String appBarState() {
-            return "{\"service\":" + appBarOn() + ",\"show\":" + Hosted.barEnabled(MainActivity.this) + ",\"windowed\":" + Hosted.windowed(MainActivity.this) + "}";
+            boolean addon = false, service = false;
+            try { getPackageManager().getPackageInfo(Hosted.ADDON, 0); addon = true; } catch (Exception ignored) {}
+            try {
+                String list = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+                service = addon && list != null && list.contains(Hosted.ADDON + "/");
+            } catch (Exception ignored) {}
+            return "{\"addon\":" + addon + ",\"service\":" + service + ",\"show\":" + Hosted.barEnabled(MainActivity.this)
+                    + ",\"windowed\":" + Hosted.windowed(MainActivity.this) + "}";
         }
 
         @android.webkit.JavascriptInterface
         public void setAppBar(boolean on) { Hosted.setBar(MainActivity.this, on); }
 
+        /** Downloads the optional app bar add-on from AL Studio's GitHub releases. */
         @android.webkit.JavascriptInterface
-        public void setWindowed(boolean on) { Hosted.setWindowed(MainActivity.this, on); }
+        public void getAddon() {
+            main.post(() -> openExternal("https://github.com/luaslucas422-lab/AL-Studio/releases/latest/download/AL-Studio-AppBar.apk"));
+        }
 
         @android.webkit.JavascriptInterface
         public void openAccessibility() {
@@ -478,6 +410,17 @@ public class MainActivity extends Activity {
                 catch (Exception e) { toast("Accessibility settings aren't available on this device"); }
             });
         }
+
+        @android.webkit.JavascriptInterface
+        public void openAddonInfo() {
+            main.post(() -> {
+                try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + Hosted.ADDON)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception ignored) {}
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setWindowed(boolean on) { Hosted.setWindowed(MainActivity.this, on); }
 
         @android.webkit.JavascriptInterface
         public void openAppInfo() {
